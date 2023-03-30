@@ -21,6 +21,9 @@
 #define VScale(v, s) (v).x *= s, (v).y *= s
 #define VVAdd(v1, v2) VAdd(v1, v1, v2)
 
+#define NDIM 2
+
+#define AllocMem (a, n, t) (a = (t *) malloc ((n) * sizeof (t)))
 
 #define VWrap(v, t)                             \
     if (v.t >= 0.5 region.t) v.t -= region.t    \
@@ -87,6 +90,10 @@ void InitAccels () {
     int16_t n;
 
     DO_MOL VZero (mol[n].ra);
+}
+
+void AllocArrays() {
+    AllocMem (mol, nMol, Mol);
 }
 
 void SetupJob(){
