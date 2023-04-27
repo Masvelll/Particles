@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <iostream>
 #include <vector>
+#include <pybind11/stl.h>
 
 namespace py = pybind11;
 
@@ -42,16 +43,20 @@ public:
         };
     }
 
-    std::vector<double> GetMols() {
-        std::vector<double> poses;
+    std::vector<std::vector<double>> GetMols() {
+        std::vector<std::vector<double>> poses;
 
         for (auto i = 0; i < full_amount; i++){
-            Mol m = mols[i];
-            std::vector<double> pos = {m.x, m.y, m.z};
-            poses.push_back(m.x);
-            poses.push_back(m.y);
-            poses.push_back(m.z);   
-        }
+            Mol m = mols[i];   
+            std::vector<double> pose;
+            pose.push_back(m.x);
+            pose.push_back(m.y);
+            pose.push_back(m.z);
+            
+            poses.push_back(pose);
+            }
+            
+        
 
         return poses;
     }
@@ -86,6 +91,8 @@ private:
     p1.ay = fy / p1.mass; p2.ay = - fy / p2.mass;
     p1.az = fz / p1.mass; p2.az = - fz / p2.mass;
 };*/
+
+
 
 PYBIND11_MODULE(moldynamics, m) {
     m.doc() = "pybind plugin for molecular dynamics";
