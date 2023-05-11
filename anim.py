@@ -1,4 +1,5 @@
 import random
+import time
 import numpy as np
 import seaborn as sns
 import matplotlib
@@ -6,31 +7,37 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.animation import PillowWriter
-
+#посчитать коэф диффузии
+#понижение температуры --somewhat ok
+#скоростной верле -- ok
 
 epsilon = 1.0
 sigma = 1.0
 cut_off = sigma*10
-dt = 0.01
+dt = 0.005
+number_of_particles = 50
 
 t = 0
 potential_energy = []
 kinetic_energy = []
-time = []
+Time = []
 
-size = 5
+size = 7
+sum_dr = 0
 
 class Particle:
     
     def __init__(self, pos):
         self.m = 1
+        
         self.x = pos[0]
-        self.x_prev = pos[0]
+        self.vx = 0
         self.y = pos[1]
-        self.y_prev = pos[1]
+        self.vy = 0
         self.z = pos[2]
-        self.z_prev = pos[2]
+        self.vz = 0
         self.force = [0, 0, 0]
+        self.force_prev = [0, 0, 0]
 
 def calc_distance(p1, p2):
     rx = p1.x - p2.x
@@ -91,29 +98,83 @@ def calc_energy(particles):
                 potential_energy += 4 * epsilon * (sigma ** 12 / r2 **6 \
                                                    - sigma ** 6 / r2 ** 3)
 
-        vx = (p1.x - p1.x_prev) / dt
-        vy = (p1.y - p1.y_prev) / dt
-        vz = (p1.z - p1.z_prev) / dt
 
-        kinetic_energy += p1.m / 2 * (vx ** 2 + vy ** 2 + vz ** 2)
+        kinetic_energy += p1.m / 2 * (p1.vx ** 2 + p1.vy ** 2 + p1.vz ** 2)
 
     #print("kinetic >> ", kinetic_energy)
     #print("potential >> ", potential_energy)
     return kinetic_energy, potential_energy
 
-def change_pos(x, x_prev):
+def change_pos(x):
     
     if x > size:
         #print("bom")
         x -= size
-        x_prev -= size
     if x < 0:
         #print("bom")
         x += size
-        x_prev += size
-    return x, x_prev
+    return x
+
+def update_force(particles, p1):
+    force = [0, 0, 0]
+    for p2 in particles:
+        if p1 != p2:
+            forces = calc_forces(p1, p2)
+            force[0] += forces[0]
+            force[1] += forces[1]
+            force[2] += forces[2]
+    p1.force = force
+def update_forces(particles):
+    n = len(particles)
+    for i in range(n):
+        force = [0, 0, 0]
+        for j in range(n):
+            if i != j:
+                forces = calc_forces(particles[i], particles[j])
+                force[0] += forces[0]
+                force[1] += forces[1]
+                force[2] += forces[2]
+        particles[i].force_prev = particles[i].force
+        particles[i].force = force
 
 def update_position(particles, dt):
+    energy_to_down = False
+    for p in particles:
+        fx_prev, fy_prev, fz_prev = p.force_prev    
+        
+        p.x = p.x + p.vx * dt + 1 / 2 * fx_prev / p.m * dt ** 2
+        p.y = p.y + p.vy * dt + 1 / 2 * fy_prev / p.m * dt ** 2
+        p.z = p.z + p.vz * dt + 1 / 2 * fz_prev / p.m * dt ** 2
+        
+        p.force_prev = p.force
+
+        p.x = change_pos(p.x)
+        p.y = change_pos(p.y)
+        p.z = change_pos(p.z)
+
+    for p in particles:
+        update_force(particles, p)
+        fx, fy, fz = p.force
+        fx_prev, fy_prev, fz_prev = p.force_prev
+        p.vx = p.vx + 1 / 2 * (fx_prev / p.m + fx / p.m) * dt
+        p.vy = p.vy + 1 / 2 * (fy_prev / p.m + fy / p.m) * dt
+        p.vz = p.vz + 1 / 2 * (fz_prev / p.m + fz / p.m) * dt
+
+        if p.vx ** 2 + p.vy ** 2 + p.vz ** 2 > 100:
+            energy_to_down = True
+            
+            p.vx *= 0.9
+            p.vy *= 0.9
+            p.vz *= 0.9
+    if energy_to_down: print("Energy decreased! ", end='')
+
+        
+                
+    
+
+        
+
+def update_position_s(particles, dt):
     for p in particles:
         fx, fy, fz = p.force
         x_prev_next = p.x
@@ -130,43 +191,41 @@ def update_position(particles, dt):
         p.y, p.y_prev = change_pos(p.y, p.y_prev)
         p.z, p.z_prev = change_pos(p.z, p.z_prev)
 
-def update_forces(particles):
-    n = len(particles)
-    for i in range(n):
-        force = [0, 0, 0]
-        for j in range(n):
-            if i != j:
-                forces = calc_forces(particles[i], particles[j])
-                force[0] += forces[0]
-                force[1] += forces[1]
-                force[2] += forces[2]
-        particles[i].force = force
+        p.vx = (p.x - p.x_prev) / dt
+        p.vy = (p.y - p.y_prev) / dt
+        p.vz = (p.z - p.z_prev) / dt
+
+
 
 def update(particles, dt, n):
     global t, potential_energy, kinetic_energy
+    
     for i in range(n):
         t += dt
-        time.append(t)
-        
-        update_forces(particles)
+        Time.append(t)
+
+        #update_forces(particles)
+        st = time.time()
         update_position(particles, dt)
         
         k, p = calc_energy(particles)
         potential_energy.append(p)
         kinetic_energy.append(k)
+        et = time.time()
+        print(f"Took {(et - st) * 1000} ms to update! ")
 
 def count_speed(particles):
     distr = []
     for p in particles:
-        vx = (p.x - p.x_prev) / dt
-        vy = (p.y - p.y_prev) / dt
-        vz = (p.z - p.z_prev) / dt
-        v2 = vx ** 2 + vy ** 2 + vz ** 2
+        v2 = p.vx ** 2 + p.vy ** 2 + p.vz ** 2
         distr.append(v2)
     return distr
 
 def plot_update(particles):
-    update(particles, dt , 1)
+    st = time.time()
+    update(particles, dt , 10)
+    et = time.time()
+    print(f"It took {(et - st) * 1000} miliseconds to update 10 times! ", end='')
     ax.clear()
     ax2.clear()
     ax3.clear()
@@ -178,17 +237,25 @@ def plot_update(particles):
     ax.set_title("Animation")
     ax2.set_title("Energy")
     
-    ax2.plot(time, kinetic_energy, label="kinetic_energy")
-    ax2.plot(time, potential_energy, label="potential_energy")
-    ax2.plot(time, np.array(potential_energy) + np.array(kinetic_energy), label="full")
+    ax2.plot(Time, kinetic_energy, label="kinetic_energy")
+    ax2.plot(Time, potential_energy, label="potential_energy")
+    ax2.plot(Time, np.array(potential_energy) + np.array(kinetic_energy), label="full")
     ax2.legend()
     #print(count_speed(particles))
     sns.kdeplot(count_speed(particles), ax=ax3)
-    
+
+    st = time.time()
+    X, Y, Z = [], [], []
     for p in particles:
-        #print(">> ", p.x, p.y, p.z)
-        #print(p.force)
-        img.append(ax.scatter3D(p.x, p.y, p.z, c="red", s=10))
+        X.append(p.x)
+        Y.append(p.y)
+        Z.append(p.z)
+    
+    img.append(ax.scatter3D(X, Y, Z, c="red", s=10, alpha=1))
+    et = time.time()
+    print("Plotted!")
+    print(f"It took {(et - st) * 1000} milliseconds to plot!")
+    
     return img
 
 def generate_positions(n):
@@ -221,7 +288,7 @@ def generate_positions(n):
 
 
 
-number_of_particles = 60
+
 positions = generate_positions(number_of_particles)
 particles = []
 #p1 = Particle([1, 1, 1])
@@ -241,7 +308,7 @@ metadata = dict(title='Movie Test', artist='Matplotlib',
                 comment='Movie support!')
 writer = PillowWriter(fps=120, metadata=metadata)
 
-fig = plt.figure("Lennard-Jones", figsize=(12, 6))
+fig = plt.figure(figsize=(12, 6))
 
 ax = fig.add_subplot(121, projection='3d')
 ax2 = fig.add_subplot(222)
@@ -251,27 +318,37 @@ ax3 = fig.add_subplot(224)
 
 def do_ani():
 
-    anim = animation.FuncAnimation(fig, plot_update, [particles], interval=15, blit=False, repeat=True)
+    line_ani = animation.FuncAnimation(fig, plot_update, [particles], interval=15, blit=False, repeat=True)
     plt.show()
 
-    fig2 = plt.figure("Energy graphs")
-    plt.plot(time, kinetic_energy, label="kinetic")
-    plt.plot(time, potential_energy, label="potential")
-    plt.plot(time, np.array(potential_energy) + np.array(kinetic_energy), label="full")
+    plt.plot(Time, kinetic_energy, label="kinetic")
+    plt.plot(Time, potential_energy, label="potential")
+    plt.plot(Time, np.array(potential_energy) + np.array(kinetic_energy), label="full")
     plt.legend()
     plt.show()
 
 def create_gif():
-    with writer.saving(fig, "Best_ani_ever3.gif", 100):
-        for i in range(500):
-            print("frame {} done".format(i))
+    with writer.saving(fig, "ani.gif", 150):
+        frame_number = 200
+        for i in range(frame_number):
+            print('\n'*10)
+            print(f"========== FRAME {i+1}/{frame_number} ==========")
             plot_update(particles)
             writer.grab_frame()
+            
 
     print("file created")
 
-do_ani()
-#create_gif()
+#for i in range(300):
+#    print("frame >> ", i)
+#    update(particles, dt , 100)
+
+#do_ani()
+create_gif()
+#with open("data8.txt", "w") as file:
+#    file.write("\n".join(map(str, count_speed(particles))))
+#    print(count_speed(particles))
+
 
 
 
